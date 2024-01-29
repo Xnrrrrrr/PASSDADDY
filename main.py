@@ -3,7 +3,7 @@ import random
 import string
 
 DATABASE_FILE = "passwords.db"
-
+                                        # needed
 def create_table():
     connection = sqlite3.connect(DATABASE_FILE)
     cursor = connection.cursor()
