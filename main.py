@@ -3,12 +3,12 @@ import random
 import string
 
 DATABASE_FILE = "passwords.db"
-                                        # needed
+
 def create_table():
     connection = sqlite3.connect(DATABASE_FILE)
     cursor = connection.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS passwords
-                      (identifier TEXT PRIMARY KEY, password TEXT)''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS accounts
+                      (id INTEGER PRIMARY KEY, username TEXT, password TEXT, medium TEXT)''')
     connection.commit()
     connection.close()
 
@@ -27,56 +27,99 @@ def generate_password(length=12, uppercase=True, digits=True, special_characters
     password = ''.join(random.choice(characters) for _ in range(length))
     return password
 
-def save_password(identifier, password):
+def save_account(username, password, medium):
     connection = sqlite3.connect(DATABASE_FILE)
     cursor = connection.cursor()
-    cursor.execute("INSERT OR REPLACE INTO passwords (identifier, password) VALUES (?, ?)", (identifier, password))
+    cursor.execute("INSERT INTO accounts (username, password, medium) VALUES (?, ?, ?)", (username, password, medium))
     connection.commit()
     connection.close()
 
-def load_passwords():
+def load_accounts():
     connection = sqlite3.connect(DATABASE_FILE)
     cursor = connection.cursor()
-    cursor.execute("SELECT * FROM passwords")
-    passwords = {row[0]: row[1] for row in cursor.fetchall()}
+    cursor.execute("SELECT * FROM accounts")
+    accounts = cursor.fetchall()
     connection.close()
-    return passwords
+    return accounts
 
-def view_passwords():
-    passwords = load_passwords()
+def view_accounts():
+    accounts = load_accounts()
 
-    if not passwords:
-        print("No passwords found.")
+    if not accounts:
+        print("No accounts found.")
     else:
-        print("\nStored Passwords:")
-        for identifier, password in passwords.items():
-            print(f"  {identifier}: {password}")
+        print("\nStored Accounts:")
+        for account in accounts:
+            print(f"  ID: {account[0]}, Username: {account[1]}, Password: {account[2]}, Medium: {account[3]}")
+
+def generate_random_password():
+    password = generate_password()
+    print(f"\nGenerated Random Password: {password}")
+    return password
+
+
+def welcome_message():
+    welcome_art = """
+\033[91m
+ _______     _       ______    ______   ______        _       ______   ______   ____  ____  
+|_   __ \   / \    .' ____ \ .' ____ \ |_   _ `.     / \     |_   _ `.|_   _ `.|_  _||_  _| 
+  | |__) | / _ \   | (___ \_|| (___ \_|  | | `. \   / _ \      | | `. \ | | `. \ \ \  / /   
+  |  ___/ / ___ \   _.____`.  _.____`.   | |  | |  / ___ \     | |  | | | |  | |  \ \/ /    
+ _| |_  _/ /   \ \_| \____) || \____) | _| |_.' /_/ /   \ \_  _| |_.' /_| |_.' /  _|  |_    
+|_____||____| |____|\______.' \______.'|______.'|____| |____||______.'|______.'  |______|   
+
+\033[0m
+    """
+    print(welcome_art)
+
+def print_menu():
+    border = "+" + "-"*30 + "+"
+    menu = f"""
+--------------------------------
+|           Menu:              |
+| 1. Generate Password         |
+|    and Save Account          |
+| 2. Generate Random Password  |
+|    (not saved)               |
+| 3. View Accounts             |
+| 4. Exit                      |
+--------------------------------
+    """
+    print(menu)
+
+
 
 def main():
     create_table()
+    welcome_message()
 
     while True:
-        print("\nMenu:")
-        print("1. Generate Password")
-        print("2. View Passwords")
-        print("3. Exit")
 
-        choice = input("Enter your choice (1, 2, or 3): ")
+        print_menu()
+
+        choice = input("Enter your choice (1, 2, 3, or 4): ")
 
         if choice == '1':
-            identifier = input("\nEnter an identifier for the password: ")
+            username = input("\nEnter the username for the account: ")
+            medium = input("Enter the medium (e.g., Facebook, Instagram): ")
             password = generate_password()
-            save_password(identifier, password)
-            print(f"\nGenerated Password for {identifier}: {password}")
+            save_account(username, password, medium)
+            print(f"\nGenerated and Saved Account:\n  Username: {username}, Password: {password}, Medium: {medium}")
         elif choice == '2':
-            view_passwords()
+            generate_random_password()
         elif choice == '3':
+            view_accounts()
+        elif choice == '4':
             print("\nExiting program.")
             break
         else:
-            print("\nInvalid choice. Please enter 1, 2, or 3.")
+            print("\nInvalid choice. Please enter 1, 2, 3, or 4.")
 
         input("\nPress Enter to continue...")
 
 if __name__ == "__main__":
     main()
+
+
+
+
