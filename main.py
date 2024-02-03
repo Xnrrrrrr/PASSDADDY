@@ -12,6 +12,8 @@ def create_table():
     connection.commit()
     connection.close()
 
+    # possibly add master acc creation n save
+
 def generate_password(length=12, uppercase=True, digits=True, special_characters=True):
     characters = string.ascii_lowercase
     if uppercase:
@@ -119,7 +121,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
