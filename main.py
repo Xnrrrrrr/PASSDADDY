@@ -37,6 +37,22 @@ def create_master_account(connection):
     else:
         print("Master account already exists.")
 
+def authenticate_master_account(connection):
+    cursor = connection.cursor()
+
+    while True:
+        username = input("Enter master account username: ")
+        password = input("Enter master account password: ")
+
+        cursor.execute("SELECT COUNT(*) FROM master_accounts WHERE username = ? AND password = ?", (username, password))
+        count = cursor.fetchone()[0]
+
+        if count > 0:
+            print("Authentication successful.")
+            break
+        else:
+            print("Authentication failed. Please try again.")
+
 def generate_password(length=12, uppercase=True, digits=True, special_characters=True):
     characters = string.ascii_lowercase
     if uppercase:
@@ -112,6 +128,9 @@ def main():
     create_tables(connection)
     create_master_account(connection)
     welcome_message()
+
+    # Authenticate master account before allowing access
+    authenticate_master_account(connection)
 
     while True:
 
