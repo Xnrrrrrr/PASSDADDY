@@ -132,30 +132,37 @@ def main():
     # Authenticate master account before allowing access
     authenticate_master_account(connection)
 
-    while True:
+    try:
 
-        print_menu()
+        while True:
 
-        choice = input("Enter your choice (1, 2, 3, or 4): ")
+            print_menu()
 
-        if choice == '1':
-            username = input("\nEnter the username for the account: ")
-            medium = input("Enter the medium (e.g., Facebook, Instagram): ")
-            password = generate_password()
-            save_account(connection, username, password, medium)
-            print(f"\nGenerated and Saved Account:\n  Username: {username}, Password: {password}, Medium: {medium}")
-        elif choice == '2':
-            generate_random_password()
-        elif choice == '3':
-            view_accounts(connection)
-        elif choice == '4':
-            print("\nExiting program.")
-            connection.close()
-            break
-        else:
-            print("\nInvalid choice. Please enter 1, 2, 3, or 4.")
+            choice = input("Enter your choice (1, 2, 3, or 4): ")
 
-        input("\nPress Enter to continue...")
+            if choice == '1':
+                username = input("\nEnter the username for the account: ")
+                medium = input("Enter the medium (e.g., Facebook, Instagram): ")
+                password = generate_password()
+                save_account(connection, username, password, medium)
+                print(f"\nGenerated and Saved Account:\n  Username: {username}, Password: {password}, Medium: {medium}")
+            elif choice == '2':
+                generate_random_password()
+            elif choice == '3':
+                view_accounts(connection)
+            elif choice == '4':
+                print("\nExiting program.")
+                connection.close()
+                break
+            else:
+                print("\nInvalid choice. Please enter 1, 2, 3, or 4.")
+
+            input("\nPress Enter to continue...")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    finally:
+        connection.close()
 
 if __name__ == "__main__":
     main()
