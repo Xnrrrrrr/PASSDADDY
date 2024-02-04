@@ -4,15 +4,38 @@ import string
 
 DATABASE_FILE = "passwords.db"
 
-def create_table():
-    connection = sqlite3.connect(DATABASE_FILE)
+def create_tables(connection):
     cursor = connection.cursor()
+
+    # Create accounts table
     cursor.execute('''CREATE TABLE IF NOT EXISTS accounts
                       (id INTEGER PRIMARY KEY, username TEXT, password TEXT, medium TEXT)''')
-    connection.commit()
-    connection.close()
 
-    # possibly add master acc creation n save
+    # Create master_accounts table
+    cursor.execute('''CREATE TABLE IF NOT EXISTS master_accounts
+                      (id INTEGER PRIMARY KEY, username TEXT, password TEXT)''')
+
+    connection.commit()
+
+def create_master_account(connection):
+    cursor = connection.cursor()
+
+    # Check if there is already a master account
+    cursor.execute("SELECT COUNT(*) FROM master_accounts")
+    count = cursor.fetchone()[0]
+
+    if count == 0:
+        # Prompt for master account creation
+        master_username = input("Enter the master account username: ")
+        master_password = input("Enter the master account password: ")
+
+        # Save master account information
+        cursor.execute("INSERT INTO master_accounts (username, password) VALUES (?, ?)",
+                       (master_username, master_password))
+        connection.commit()
+        print("Master account created successfully.")
+    else:
+        print("Master account already exists.")
 
 def generate_password(length=12, uppercase=True, digits=True, special_characters=True):
     characters = string.ascii_lowercase
@@ -29,23 +52,19 @@ def generate_password(length=12, uppercase=True, digits=True, special_characters
     password = ''.join(random.choice(characters) for _ in range(length))
     return password
 
-def save_account(username, password, medium):
-    connection = sqlite3.connect(DATABASE_FILE)
+def save_account(connection, username, password, medium):
     cursor = connection.cursor()
     cursor.execute("INSERT INTO accounts (username, password, medium) VALUES (?, ?, ?)", (username, password, medium))
     connection.commit()
-    connection.close()
 
-def load_accounts():
-    connection = sqlite3.connect(DATABASE_FILE)
+def load_accounts(connection):
     cursor = connection.cursor()
     cursor.execute("SELECT * FROM accounts")
     accounts = cursor.fetchall()
-    connection.close()
     return accounts
 
-def view_accounts():
-    accounts = load_accounts()
+def view_accounts(connection):
+    accounts = load_accounts(connection)
 
     if not accounts:
         print("No accounts found.")
@@ -58,7 +77,6 @@ def generate_random_password():
     password = generate_password()
     print(f"\nGenerated Random Password: {password}")
     return password
-
 
 def welcome_message():
     welcome_art = """
@@ -89,10 +107,10 @@ def print_menu():
     """
     print(menu)
 
-
-# add steve
 def main():
-    create_table()
+    connection = sqlite3.connect(DATABASE_FILE)
+    create_tables(connection)
+    create_master_account(connection)
     welcome_message()
 
     while True:
@@ -105,14 +123,15 @@ def main():
             username = input("\nEnter the username for the account: ")
             medium = input("Enter the medium (e.g., Facebook, Instagram): ")
             password = generate_password()
-            save_account(username, password, medium)
+            save_account(connection, username, password, medium)
             print(f"\nGenerated and Saved Account:\n  Username: {username}, Password: {password}, Medium: {medium}")
         elif choice == '2':
             generate_random_password()
         elif choice == '3':
-            view_accounts()
+            view_accounts(connection)
         elif choice == '4':
             print("\nExiting program.")
+            connection.close()
             break
         else:
             print("\nInvalid choice. Please enter 1, 2, 3, or 4.")
