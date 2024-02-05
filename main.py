@@ -1,6 +1,7 @@
 import sqlite3
 import random
 import string
+import hashlib
 
 DATABASE_FILE = "passwords.db"
 
@@ -29,6 +30,9 @@ def create_master_account(connection):
         master_username = input("Enter the master account username: ")
         master_password = input("Enter the master account password: ")
 
+        # Hash master account password
+        master_password_hash = hashlib.sha256(master_password.encode()).hexdigest()
+
         # Save master account information
         cursor.execute("INSERT INTO master_accounts (username, password) VALUES (?, ?)",
                        (master_username, master_password))
@@ -45,6 +49,9 @@ def authenticate_master_account(connection):
         username = input("Enter master account username: ")
         password = input("Enter master account password: ")
         print("\033[0m")  # Reset text color to default
+
+        # Hash entered password for comparison
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
 
         cursor.execute("SELECT COUNT(*) FROM master_accounts WHERE username = ? AND password = ?", (username, password))
         count = cursor.fetchone()[0]
@@ -72,8 +79,15 @@ def generate_password(length=12, uppercase=True, digits=True, special_characters
 
 def save_account(connection, username, password, medium):
     cursor = connection.cursor()
-    cursor.execute("INSERT INTO accounts (username, password, medium) VALUES (?, ?, ?)", (username, password, medium))
+
+    # Hash password before saving
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+    cursor.execute("INSERT INTO accounts (username, password, medium) VALUES (?, ?, ?)", (username, password_hash, medium))
     connection.commit()
+
+    return password_hash
+
 
 def load_accounts(connection):
     cursor = connection.cursor()
@@ -148,9 +162,16 @@ def main():
             if choice == '1':
                 username = input("\nEnter the username for the account: ")
                 medium = input("Enter the medium (e.g., Facebook, Instagram): ")
-                password = generate_password()
-                save_account(connection, username, password, medium)
-                print(f"\nGenerated and Saved Account:\n  Username: {username}, Password: {password}, Medium: {medium}")
+
+                # Ask the user for the password
+                password = input("Enter the password for the account: ")
+
+                # Save the hashed password in the accounts table
+                hashed_password = save_account(connection, username, password, medium)
+
+                print(
+                    f"\nGenerated and Saved Account:\n  Username: {username}, Hashed Password: {hashed_password}, Medium: {medium}")
+
             elif choice == '2':
                 generate_random_password()
             elif choice == '3':
