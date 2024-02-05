@@ -41,8 +41,10 @@ def authenticate_master_account(connection):
     cursor = connection.cursor()
 
     while True:
+        print("\033[34m")  # Set text color to blue
         username = input("Enter master account username: ")
         password = input("Enter master account password: ")
+        print("\033[0m")  # Reset text color to default
 
         cursor.execute("SELECT COUNT(*) FROM master_accounts WHERE username = ? AND password = ?", (username, password))
         count = cursor.fetchone()[0]
@@ -103,6 +105,9 @@ def welcome_message():
   |  ___/ / ___ \   _.____`.  _.____`.   | |  | |  / ___ \     | |  | | | |  | |  \ \/ /    
  _| |_  _/ /   \ \_| \____) || \____) | _| |_.' /_/ /   \ \_  _| |_.' /_| |_.' /  _|  |_    
 |_____||____| |____|\______.' \______.'|______.'|____| |____||______.'|______.'  |______|   
+
+> Written by Xnrrrrrr
+> v1.0
 
 \033[0m
     """
@@ -166,3 +171,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
