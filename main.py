@@ -64,29 +64,31 @@ def generate_strong_key():
     # Generate a strong random key (replace this with a secure key management solution)
     return secrets.token_bytes(32)
 
+
 def encrypt_password(password, key):
+    # Convert the password to bytes
+    password_bytes = password.encode('utf-8')
+
     # Pad the password to meet block size requirements
-    password = password.ljust(32)
+    password_bytes = password_bytes.ljust(32)
 
     # Generate an IV (Initialization Vector)
     iv = b'\x00' * 16
-
-    print(f"Encryption Key: {key}")
-    print(f"Encryption IV: {iv}")
 
     # Create a cipher object using AES in CBC mode
     cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
 
     # Encrypt the password
     encryptor = cipher.encryptor()
-    encrypted_password = encryptor.update(password) + encryptor.finalize()
+    encrypted_password = encryptor.update(password_bytes) + encryptor.finalize()
 
     # Encode the encrypted password for storage
     global encoded_password
     encoded_password = base64.b64encode(encrypted_password)
-    print(f"Encrypted Password: {encoded_password}")
 
     return encoded_password
+
+
 
 def authenticate_master_account(connection, encryption_key, encoded_password):
     cursor = connection.cursor()
@@ -125,9 +127,6 @@ def decrypt_and_decode_password(encoded_password, key):
     # Generate an IV (Initialization Vector)
     iv = b'\x00' * 16
 
-    print(f"Decryption Key: {key}")
-    print(f"Decryption IV: {iv}")
-
     # Create a cipher object using AES in CBC mode
     cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
 
@@ -136,8 +135,8 @@ def decrypt_and_decode_password(encoded_password, key):
     decrypted_password = decryptor.update(encrypted_password) + decryptor.finalize()
 
     # Return the decrypted password as bytes
-    print(f"Decrypted Password Bytes: {decrypted_password}")
     return decrypted_password
+
 
 def generate_password(length=12, uppercase=True, digits=True, special_characters=True):
     characters = string.ascii_lowercase
