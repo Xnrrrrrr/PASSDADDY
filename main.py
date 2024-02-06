@@ -7,6 +7,9 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
 
 DATABASE_FILE = "passwords.db"
+ENCRYPTION_KEY_FILE = "encryption_key.bin"
+encoded_password = None  # Declare encoded_password at the global scope
+encryption_key = None
 
 def create_tables(connection):
     cursor = connection.cursor()
@@ -21,9 +24,17 @@ def create_tables(connection):
 
     connection.commit()
 
-def generate_strong_key():
-    # Generate a strong random key (replace this with a secure key management solution)
-    return secrets.token_bytes(32)
+def load_or_generate_encryption_key():
+    global encryption_key
+
+    try:
+        with open(ENCRYPTION_KEY_FILE, 'rb') as key_file:
+            encryption_key = key_file.read()
+    except FileNotFoundError:
+        # If the key file doesn't exist, generate a new key
+        encryption_key = generate_strong_key()
+        with open(ENCRYPTION_KEY_FILE, 'wb') as key_file:
+            key_file.write(encryption_key)
 
 def create_master_account(connection, encryption_key):
     cursor = connection.cursor()
@@ -49,6 +60,10 @@ def create_master_account(connection, encryption_key):
     else:
         print("Master account already exists.")
 
+def generate_strong_key():
+    # Generate a strong random key (replace this with a secure key management solution)
+    return secrets.token_bytes(32)
+
 def encrypt_password(password, key):
     # Pad the password to meet block size requirements
     password = password.ljust(32)
@@ -67,15 +82,13 @@ def encrypt_password(password, key):
     encrypted_password = encryptor.update(password) + encryptor.finalize()
 
     # Encode the encrypted password for storage
+    global encoded_password
     encoded_password = base64.b64encode(encrypted_password)
     print(f"Encrypted Password: {encoded_password}")
 
     return encoded_password
 
-
-# Change in authenticate_master_account function
-# Change in authenticate_master_account function
-def authenticate_master_account(connection, encryption_key):
+def authenticate_master_account(connection, encryption_key, encoded_password):
     cursor = connection.cursor()
 
     while True:
@@ -84,31 +97,19 @@ def authenticate_master_account(connection, encryption_key):
         password = input("Enter master account password: ")
         print("\033[0m")  # Reset text color to default
 
-        # Hash and encrypt the entered password for comparison
         password_hash = hashlib.sha256(password.encode()).digest()
-        entered_password_encrypted = encrypt_password(password_hash, encryption_key)
 
         cursor.execute("SELECT password FROM master_accounts WHERE username = ?", (username,))
         encrypted_password = cursor.fetchone()
 
-        print(f"Entered Password Hash: {password_hash}")
-        print(f"Stored Encrypted Password: {encrypted_password}")
-
         if encrypted_password:
-            # Decrypt the stored password and compare with the entered and encrypted hash
             decrypted_password_bytes = decrypt_and_decode_password(encrypted_password[0], encryption_key)
 
             print(f"Decrypted Password Bytes: {decrypted_password_bytes}")
-            print(f"Entered Password Encrypted: {entered_password_encrypted}")
+            print(f"Entered Password Hash: {password_hash}")
 
-            # Print hexadecimal representations
-            print(f"Decrypted Password Hex: {decrypted_password_bytes.hex()}")
-            print(f"Entered Password Encrypted Hex: {entered_password_encrypted.hex()}")
-
-            hashed_entered_password = hashlib.sha256(entered_password_encrypted).digest()
-
-            if decrypted_password_bytes == entered_password_encrypted:
-
+            # Test against password_hash
+            if password_hash == decrypted_password_bytes:
                 print("Authentication successful.")
                 break
             else:
@@ -137,7 +138,6 @@ def decrypt_and_decode_password(encoded_password, key):
     # Return the decrypted password as bytes
     print(f"Decrypted Password Bytes: {decrypted_password}")
     return decrypted_password
-
 
 def generate_password(length=12, uppercase=True, digits=True, special_characters=True):
     characters = string.ascii_lowercase
@@ -221,14 +221,15 @@ def print_menu():
     print(menu)
 
 def main():
+    global encryption_key
     connection = sqlite3.connect(DATABASE_FILE)
     create_tables(connection)
-    encryption_key = generate_strong_key()
+    load_or_generate_encryption_key()
     create_master_account(connection, encryption_key)
     welcome_message()
 
     # Authenticate master account before allowing access
-    authenticate_master_account(connection, encryption_key)
+    authenticate_master_account(connection, encryption_key, encoded_password)
 
     try:
         while True:
