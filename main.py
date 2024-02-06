@@ -1,7 +1,10 @@
+import secrets
 import sqlite3
-import random
 import string
 import hashlib
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+import base64
 
 DATABASE_FILE = "passwords.db"
 
@@ -18,7 +21,11 @@ def create_tables(connection):
 
     connection.commit()
 
-def create_master_account(connection):
+def generate_strong_key():
+    # Generate a strong random key (replace this with a secure key management solution)
+    return secrets.token_bytes(32)
+
+def create_master_account(connection, encryption_key):
     cursor = connection.cursor()
 
     # Check if there is already a master account
@@ -30,18 +37,45 @@ def create_master_account(connection):
         master_username = input("Enter the master account username: ")
         master_password = input("Enter the master account password: ")
 
-        # Hash master account password
-        master_password_hash = hashlib.sha256(master_password.encode()).hexdigest()
+        # Hash and encrypt master account password
+        master_password_hash = hashlib.sha256(master_password.encode()).digest()
+        master_password_encrypted = encrypt_password(master_password_hash, encryption_key)
 
         # Save master account information
         cursor.execute("INSERT INTO master_accounts (username, password) VALUES (?, ?)",
-                       (master_username, master_password))
+                       (master_username, master_password_encrypted))
         connection.commit()
         print("Master account created successfully.")
     else:
         print("Master account already exists.")
 
-def authenticate_master_account(connection):
+def encrypt_password(password, key):
+    # Pad the password to meet block size requirements
+    password = password.ljust(32)
+
+    # Generate an IV (Initialization Vector)
+    iv = b'\x00' * 16
+
+    print(f"Encryption Key: {key}")
+    print(f"Encryption IV: {iv}")
+
+    # Create a cipher object using AES in CBC mode
+    cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+
+    # Encrypt the password
+    encryptor = cipher.encryptor()
+    encrypted_password = encryptor.update(password) + encryptor.finalize()
+
+    # Encode the encrypted password for storage
+    encoded_password = base64.b64encode(encrypted_password)
+    print(f"Encrypted Password: {encoded_password}")
+
+    return encoded_password
+
+
+# Change in authenticate_master_account function
+# Change in authenticate_master_account function
+def authenticate_master_account(connection, encryption_key):
     cursor = connection.cursor()
 
     while True:
@@ -50,17 +84,60 @@ def authenticate_master_account(connection):
         password = input("Enter master account password: ")
         print("\033[0m")  # Reset text color to default
 
-        # Hash entered password for comparison
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        # Hash and encrypt the entered password for comparison
+        password_hash = hashlib.sha256(password.encode()).digest()
+        entered_password_encrypted = encrypt_password(password_hash, encryption_key)
 
-        cursor.execute("SELECT COUNT(*) FROM master_accounts WHERE username = ? AND password = ?", (username, password))
-        count = cursor.fetchone()[0]
+        cursor.execute("SELECT password FROM master_accounts WHERE username = ?", (username,))
+        encrypted_password = cursor.fetchone()
 
-        if count > 0:
-            print("Authentication successful.")
-            break
+        print(f"Entered Password Hash: {password_hash}")
+        print(f"Stored Encrypted Password: {encrypted_password}")
+
+        if encrypted_password:
+            # Decrypt the stored password and compare with the entered and encrypted hash
+            decrypted_password_bytes = decrypt_and_decode_password(encrypted_password[0], encryption_key)
+
+            print(f"Decrypted Password Bytes: {decrypted_password_bytes}")
+            print(f"Entered Password Encrypted: {entered_password_encrypted}")
+
+            # Print hexadecimal representations
+            print(f"Decrypted Password Hex: {decrypted_password_bytes.hex()}")
+            print(f"Entered Password Encrypted Hex: {entered_password_encrypted.hex()}")
+
+            hashed_entered_password = hashlib.sha256(entered_password_encrypted).digest()
+
+            if decrypted_password_bytes == entered_password_encrypted:
+
+                print("Authentication successful.")
+                break
+            else:
+                print("Authentication failed. Passwords do not match.")
         else:
-            print("Authentication failed. Please try again.")
+            print("Authentication failed. User not found.")
+
+
+def decrypt_and_decode_password(encoded_password, key):
+    # Decode the encoded password
+    encrypted_password = base64.b64decode(encoded_password)
+
+    # Generate an IV (Initialization Vector)
+    iv = b'\x00' * 16
+
+    print(f"Decryption Key: {key}")
+    print(f"Decryption IV: {iv}")
+
+    # Create a cipher object using AES in CBC mode
+    cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
+
+    # Decrypt the password
+    decryptor = cipher.decryptor()
+    decrypted_password = decryptor.update(encrypted_password) + decryptor.finalize()
+
+    # Return the decrypted password as bytes
+    print(f"Decrypted Password Bytes: {decrypted_password}")
+    return decrypted_password
+
 
 def generate_password(length=12, uppercase=True, digits=True, special_characters=True):
     characters = string.ascii_lowercase
@@ -74,20 +151,21 @@ def generate_password(length=12, uppercase=True, digits=True, special_characters
     if length < 1:
         raise ValueError("Password length must be at least 1")
 
-    password = ''.join(random.choice(characters) for _ in range(length))
+    password = ''.join(secrets.choice(characters) for _ in range(length))
     return password
 
-def save_account(connection, username, password, medium):
+def save_account(connection, username, password, medium, encryption_key):
     cursor = connection.cursor()
 
-    # Hash password before saving
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    # Hash and encrypt the password before saving
+    hashed_and_encrypted_password = encrypt_password(password, encryption_key)
 
-    cursor.execute("INSERT INTO accounts (username, password, medium) VALUES (?, ?, ?)", (username, password_hash, medium))
+    # Save the hashed and encrypted password in the accounts table
+    cursor.execute("INSERT INTO accounts (username, password, medium) VALUES (?, ?, ?)",
+                   (username, hashed_and_encrypted_password, medium))
     connection.commit()
 
-    return password_hash
-
+    return hashed_and_encrypted_password
 
 def load_accounts(connection):
     cursor = connection.cursor()
@@ -145,18 +223,16 @@ def print_menu():
 def main():
     connection = sqlite3.connect(DATABASE_FILE)
     create_tables(connection)
-    create_master_account(connection)
+    encryption_key = generate_strong_key()
+    create_master_account(connection, encryption_key)
     welcome_message()
 
     # Authenticate master account before allowing access
-    authenticate_master_account(connection)
+    authenticate_master_account(connection, encryption_key)
 
     try:
-
         while True:
-
             print_menu()
-
             choice = input("Enter your choice (1, 2, 3, or 4): ")
 
             if choice == '1':
@@ -167,7 +243,7 @@ def main():
                 password = input("Enter the password for the account: ")
 
                 # Save the hashed password in the accounts table
-                hashed_password = save_account(connection, username, password, medium)
+                hashed_password = save_account(connection, username, password, medium, encryption_key)
 
                 print(
                     f"\nGenerated and Saved Account:\n  Username: {username}, Hashed Password: {hashed_password}, Medium: {medium}")
@@ -184,6 +260,7 @@ def main():
                 print("\nInvalid choice. Please enter 1, 2, 3, or 4.")
 
             input("\nPress Enter to continue...")
+
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
@@ -192,5 +269,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
