@@ -7,9 +7,11 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
 import os
 from prettytable import prettytable, PrettyTable
+from datetime import datetime, timedelta
+import sys
+
 
 MAX_FAILED_ATTEMPTS = 3  # Maximum allowed failed attempts
-from datetime import datetime, timedelta
 from sqlite3 import Cursor
 DATABASE_FILE = "passwords.db"
 ENCRYPTION_KEY_FILE = "encryption_key.bin"
@@ -23,15 +25,15 @@ def create_tables(connection):
     cursor.execute('''CREATE TABLE IF NOT EXISTS accounts
                       (id INTEGER PRIMARY KEY, username TEXT, password TEXT, medium TEXT)''')
 
-    # Create master_accounts table
+    # Create master_accounts table if not exists
     cursor.execute('''CREATE TABLE IF NOT EXISTS master_accounts
-                      (id INTEGER PRIMARY KEY, username TEXT, password TEXT)''')
-
-    # Add remaining_attempts column with default value 3 to master_accounts table
-    cursor.execute('''ALTER TABLE master_accounts
-                          ADD COLUMN remaining_attempts INTEGER DEFAULT 3''')
+                      (id INTEGER PRIMARY KEY, username TEXT, password TEXT, remaining_attempts INTEGER DEFAULT 3, last_failed_attempt TIMESTAMP)''')
 
     connection.commit()
+
+
+
+
 
 def load_or_generate_encryption_key():
     global encryption_key
@@ -139,34 +141,104 @@ def encrypt_password(password, key):
 
 
 
-def authenticate_master_account(connection, encryption_key, encoded_password):
+def authenticate_master_account(connection, encryption_key):
     cursor = connection.cursor()
 
     while True:
         print("\033[34m")  # Set text color to blue
         username = input("Enter master account username: ")
+
+        # Check if the master account is locked
+        if is_master_account_locked(connection, username):
+            print(f"{username}'s account is locked. Please try again later.")
+            return False  # Authentication failed
+
         password = input("Enter master account password: ")
         print("\033[0m")  # Reset text color to default
 
         password_hash = hashlib.sha256(password.encode()).digest()
 
-        cursor.execute("SELECT password FROM master_accounts WHERE username = ?", (username,))
-        encrypted_password = cursor.fetchone()
+        cursor.execute("PRAGMA table_info(master_accounts)")
+        columns = [column[1] for column in cursor.fetchall()]
 
-        if encrypted_password:
-            decrypted_password_bytes = decrypt_and_decode_password(encrypted_password[0], encryption_key)
+        if 'last_failed_attempt' not in columns:
+            cursor.execute('''ALTER TABLE master_accounts
+                              ADD COLUMN last_failed_attempt TIMESTAMP''')
+            connection.commit()
 
-            print(f"Decrypted Password Bytes: {decrypted_password_bytes}")
-            print(f"Entered Password Hash: {password_hash}")
+        cursor.execute("SELECT password, remaining_attempts, last_failed_attempt FROM master_accounts WHERE username = ?", (username,))
+        account_info = cursor.fetchone()
 
-            # Test against password_hash
-            if password_hash == decrypted_password_bytes:
-                print("Authentication successful.")
-                break
-            else:
-                print("Authentication failed. Passwords do not match.")
+        if account_info:
+            encrypted_password, remaining_attempts, last_failed_attempt_str = account_info
+
+            if remaining_attempts > 0:
+                decrypted_password_bytes = decrypt_and_decode_password(encrypted_password, encryption_key)
+
+                print(f"Decrypted Password Bytes: {decrypted_password_bytes}")
+                print(f"Entered Password Hash: {password_hash}")
+
+                # Test against password_hash
+                if password_hash == decrypted_password_bytes:
+                    # Reset remaining attempts upon successful login
+                    cursor.execute("UPDATE master_accounts SET remaining_attempts = 3, last_failed_attempt = NULL WHERE username = ?", (username,))
+                    connection.commit()
+                    print("Authentication successful.")
+                    return True  # Authentication successful
+
+            remaining_attempts -= 1
+
+            # Update last_failed_attempt with the current timestamp
+            last_failed_attempt = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            cursor.execute(
+                "UPDATE master_accounts SET remaining_attempts = ?, last_failed_attempt = ? WHERE username = ?",
+                (remaining_attempts, last_failed_attempt, username)
+            )
+            connection.commit()
+
+            print(f"Remaining attempts: {remaining_attempts}")
+
+            if remaining_attempts == 0:
+                print("Too many failed attempts. Account locked.")
+                return False  # Authentication failed
+
+            # Check if the lockout period has passed (1 minute)
+            if last_failed_attempt_str:
+                last_failed_attempt = datetime.strptime(last_failed_attempt_str, "%Y-%m-%d %H:%M:%S.%f")
+                elapsed_time = datetime.now() - last_failed_attempt
+                if elapsed_time.total_seconds() < 60:
+                    print("Account is locked. Please try again later.")
+                    return False  # Authentication failed
+
+            print("Incorrect password. Please try again.")
+
         else:
             print("Authentication failed. User not found.")
+            return False  # Authentication failed
+
+
+
+
+
+
+
+def is_master_account_locked(connection, master_username):
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT remaining_attempts, last_failed_attempt FROM master_accounts WHERE username = ?", (master_username,))
+    account_info = cursor.fetchone()
+
+    if account_info:
+        remaining_attempts, last_failed_attempt_str = account_info
+
+        if remaining_attempts == 0 and last_failed_attempt_str:
+            last_failed_attempt = datetime.strptime(last_failed_attempt_str, "%Y-%m-%d %H:%M:%S.%f")
+            if datetime.now() - last_failed_attempt < timedelta(hours=1):
+                return True
+
+    return False
+
+
 
 
 def decrypt_and_decode_password(encoded_password, key):
@@ -235,6 +307,8 @@ def generate_random_password():
     password = generate_password()
     print(f"\nGenerated Random Password: {password}")
     return password
+
+
 
 def wipe_all_data(connection, encryption_key):
     confirmation = input("This action will permanently delete all data and the database file. Are you sure? (yes/no): ")
@@ -323,8 +397,6 @@ def print_menu():
 
 # Test the function
 
-
-
 def main():
     global encryption_key
     connection = sqlite3.connect(DATABASE_FILE)
@@ -334,7 +406,10 @@ def main():
     welcome_message()
 
     # Authenticate master account before allowing access
-    authenticate_master_account(connection, encryption_key, encoded_password)
+    if not authenticate_master_account(connection, encryption_key):
+        print("Exiting program.")
+        connection.close()
+        return
 
     try:
         while True:
@@ -367,7 +442,7 @@ def main():
             elif choice == '6':
                 print_database_contents(connection)
             else:
-                print("\nInvalid choice. Please enter 1, 2, 3, 4 or 5.")
+                print("\nInvalid choice. Please enter 1, 2, 3, 4, or 5.")
 
             input("\nPress Enter to continue...")
 
@@ -376,6 +451,7 @@ def main():
 
     finally:
         connection.close()
+
 
 if __name__ == "__main__":
     main()
