@@ -7,6 +7,9 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
 import os
 from prettytable import prettytable, PrettyTable
+
+MAX_FAILED_ATTEMPTS = 3  # Maximum allowed failed attempts
+from datetime import datetime, timedelta
 from sqlite3 import Cursor
 DATABASE_FILE = "passwords.db"
 ENCRYPTION_KEY_FILE = "encryption_key.bin"
@@ -23,6 +26,10 @@ def create_tables(connection):
     # Create master_accounts table
     cursor.execute('''CREATE TABLE IF NOT EXISTS master_accounts
                       (id INTEGER PRIMARY KEY, username TEXT, password TEXT)''')
+
+    # Add remaining_attempts column with default value 3 to master_accounts table
+    cursor.execute('''ALTER TABLE master_accounts
+                          ADD COLUMN remaining_attempts INTEGER DEFAULT 3''')
 
     connection.commit()
 
