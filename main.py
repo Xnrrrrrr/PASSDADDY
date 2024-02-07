@@ -5,6 +5,7 @@ import hashlib
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
+import os
 
 DATABASE_FILE = "passwords.db"
 ENCRYPTION_KEY_FILE = "encryption_key.bin"
@@ -66,8 +67,13 @@ def generate_strong_key():
 
 
 def encrypt_password(password, key):
-    # Convert the password to bytes
-    password_bytes = password.encode('utf-8')
+    # Ensure that the password is in bytes
+    if isinstance(password, str):
+        password_bytes = password.encode('utf-8')
+    elif isinstance(password, bytes):
+        password_bytes = password
+    else:
+        raise ValueError("Invalid password type. Must be str or bytes.")
 
     # Pad the password to meet block size requirements
     password_bytes = password_bytes.ljust(32)
@@ -87,6 +93,7 @@ def encrypt_password(password, key):
     encoded_password = base64.b64encode(encrypted_password)
 
     return encoded_password
+
 
 
 
@@ -187,6 +194,37 @@ def generate_random_password():
     print(f"\nGenerated Random Password: {password}")
     return password
 
+def wipe_all_data(connection, encryption_key):
+    confirmation = input("This action will permanently delete all data and the database file. Are you sure? (yes/no): ")
+    if confirmation.lower() == 'yes':
+        cursor = connection.cursor()
+
+        # Delete all data from the accounts table
+        cursor.execute("DELETE FROM accounts")
+
+        # Delete all data from the master_accounts table
+        cursor.execute("DELETE FROM master_accounts")
+
+        connection.commit()
+        print("All data wiped successfully.")
+
+        # Close the database connection
+        connection.close()
+
+        # Delete the database file
+        try:
+            os.remove(DATABASE_FILE)
+            print(f"Database file '{DATABASE_FILE}' deleted successfully.")
+        except FileNotFoundError:
+            print(f"Database file '{DATABASE_FILE}' not found.")
+        except Exception as e:
+            print(f"Error deleting database file: {e}")
+
+    else:
+        print("Wipe operation canceled.")
+
+
+
 def welcome_message():
     welcome_art = """
 \033[91m
@@ -226,7 +264,7 @@ def print_menu():
         "| |   		                              		    		    | |\n"
         "| |		3. View Accounts              					        | |\n"
         "| |		4. Exit                                                 | |\n"
-        "| |                                                             | |\n"
+        "| |     5. Killswitch                                           | |\n"
         "| |                                                             | |\n"
         "| |                                                             | |\n"
         "| |_____________________________________________________________| |\n"
@@ -259,7 +297,7 @@ def main():
     try:
         while True:
             print_menu()
-            choice = input("Enter your choice (1, 2, 3, or 4): ")
+            choice = input("Enter your choice (1, 2, 3, 4 or 5): ")
 
             if choice == '1':
                 username = input("\nEnter the username for the account: ")
@@ -282,8 +320,10 @@ def main():
                 print("\nExiting program.")
                 connection.close()
                 break
+            elif choice == '5':
+                wipe_all_data(connection, encryption_key)
             else:
-                print("\nInvalid choice. Please enter 1, 2, 3, or 4.")
+                print("\nInvalid choice. Please enter 1, 2, 3, 4 or 5.")
 
             input("\nPress Enter to continue...")
 
