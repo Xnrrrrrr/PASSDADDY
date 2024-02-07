@@ -6,7 +6,8 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
 import os
-
+from prettytable import prettytable, PrettyTable
+from sqlite3 import Cursor
 DATABASE_FILE = "passwords.db"
 ENCRYPTION_KEY_FILE = "encryption_key.bin"
 encoded_password = None  # Declare encoded_password at the global scope
@@ -36,6 +37,40 @@ def load_or_generate_encryption_key():
         encryption_key = generate_strong_key()
         with open(ENCRYPTION_KEY_FILE, 'wb') as key_file:
             key_file.write(encryption_key)
+
+
+def print_table(data, cursor):
+    if not data:
+        print("No records found.")
+        return
+
+    table = PrettyTable()
+
+    # Get column names using the cursor description
+    columns = [description[0] for description in cursor.description]
+
+    table.field_names = columns
+    table.add_rows(data)
+    print(table)
+
+
+
+def print_database_contents(connection):
+    cursor = connection.cursor()
+
+    # Print accounts table
+    print("\nAccounts Table:")
+    cursor.execute("SELECT * FROM accounts")
+    accounts = cursor.fetchall()
+    print_table(accounts, cursor)
+
+    # Print master_accounts table
+    print("\nMaster Accounts Table:")
+    cursor.execute("SELECT * FROM master_accounts")
+    master_accounts = cursor.fetchall()
+    print_table(master_accounts, cursor)  # <-- Corrected line
+
+
 
 def create_master_account(connection, encryption_key):
     cursor = connection.cursor()
@@ -265,7 +300,7 @@ def print_menu():
         "| |		3. View Accounts              					        | |\n"
         "| |		4. Exit                                                 | |\n"
         "| |     5. Killswitch                                           | |\n"
-        "| |                                                             | |\n"
+        "| |        6. Print database                                           | |\n"
         "| |                                                             | |\n"
         "| |_____________________________________________________________| |\n"
         "|_________________________________________________________________| \n"
@@ -322,6 +357,8 @@ def main():
                 break
             elif choice == '5':
                 wipe_all_data(connection, encryption_key)
+            elif choice == '6':
+                print_database_contents(connection)
             else:
                 print("\nInvalid choice. Please enter 1, 2, 3, 4 or 5.")
 
