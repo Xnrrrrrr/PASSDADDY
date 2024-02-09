@@ -9,6 +9,7 @@ import os
 from prettytable import prettytable, PrettyTable
 from datetime import datetime, timedelta
 import sys
+import re
 
 
 MAX_FAILED_ATTEMPTS = 3  # Maximum allowed failed attempts
@@ -32,8 +33,29 @@ def create_tables(connection):
     connection.commit()
 
 
+def calculate_password_strength(password):
+    # Minimum length requirement
+    length_score = max(0, min(len(password) // 4, 3))
 
+    # Check for uppercase letters
+    uppercase_score = int(bool(re.search(r'[A-Z]', password)))
 
+    # Check for lowercase letters
+    lowercase_score = int(bool(re.search(r'[a-z]', password)))
+
+    # Check for digits
+    digit_score = int(bool(re.search(r'\d', password)))
+
+    # Check for special characters
+    special_char_score = int(bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', password)))
+
+    # Combine scores into a total strength score (out of 10)
+    total_score = length_score + uppercase_score + lowercase_score + digit_score + special_char_score
+
+    return total_score
+
+def display_password_strength(password_strength):
+    print(f"Password Strength: {password_strength}/10")
 
 def load_or_generate_encryption_key():
     global encryption_key
