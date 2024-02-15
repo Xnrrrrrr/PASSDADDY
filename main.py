@@ -53,7 +53,7 @@ def calculate_password_strength(password):
     total_score = length_score + uppercase_score + lowercase_score + digit_score + special_char_score
 
     return total_score
-# fix 4 p
+# fix 4 poi
 def display_password_strength(password_strength):
     print(f"Password Strength: {password_strength}/10")
 
