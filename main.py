@@ -10,6 +10,8 @@ from prettytable import prettytable, PrettyTable
 from datetime import datetime, timedelta
 import sys
 import re
+import getpass  # Import the getpass module for secure password input
+
 
 
 MAX_FAILED_ATTEMPTS = 3  # Maximum allowed failed attempts
@@ -360,6 +362,46 @@ def wipe_all_data(connection, encryption_key):
 
     else:
         print("Wipe operation canceled.")
+
+def change_master_password(connection, encryption_key):
+    cursor = connection.cursor()
+
+    # Get the current master account username
+    cursor.execute("SELECT username FROM master_accounts LIMIT 1")
+    current_username = cursor.fetchone()
+
+    if not current_username:
+        print("No master account found. Please create a master account first.")
+        return
+
+    print(f"\nChanging password for master account: {current_username[0]}")
+
+    # Prompt for the current password
+    current_password = getpass.getpass("Enter current master account password: ")
+
+    # Authenticate the current password
+    if not authenticate_master_account(connection, encryption_key, current_password):
+        print("Authentication failed. Unable to change password.")
+        return
+
+    # Prompt for the new password
+    new_password = getpass.getpass("Enter new master account password: ")
+    confirm_new_password = getpass.getpass("Confirm new master account password: ")
+
+    # Check if the new password and confirmation match
+    if new_password != confirm_new_password:
+        print("New password and confirmation do not match. Password change failed.")
+        return
+
+    # Hash and encrypt the new password
+    new_password_hash = hashlib.sha256(new_password.encode()).digest()
+    new_password_encrypted = encrypt_password(new_password_hash, encryption_key)
+
+    # Update the master account password
+    cursor.execute("UPDATE master_accounts SET password = ? WHERE username = ?", (new_password_encrypted, current_username[0]))
+    connection.commit()
+
+    print("Master account password changed successfully.")
 
 
 
