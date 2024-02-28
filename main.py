@@ -458,7 +458,7 @@ def print_menu():
     )
     print(menu)
 
-# Test the functionsz
+# Test the functions
 
 def main():
     global encryption_key
