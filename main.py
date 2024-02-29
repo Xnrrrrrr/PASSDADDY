@@ -238,7 +238,7 @@ def authenticate_master_account(connection, encryption_key):
 
         else:
             print("Authentication failed. User not found.")
-            return False  # Authentication failedddddd
+            return False  # Authentication failedd
 
 
 
